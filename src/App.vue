@@ -24,7 +24,24 @@ export default {
       neo_url: `${nasa.url}/neo/rest/v1`,
       neo_data: {},
       neo_list: undefined,
+      earth: {
+        diameter_miles: 7917.5,
+        diameter_meters: 12742000,
+        container_diameter: 0,
+      },
+      size: {
+        w: 0,
+        h: 0,
+      },
       svg: undefined,
+    }
+  },
+  watch: {
+    neo_list: function (v) {
+      //console.log(this.size)
+      this.setEarthRelativeDiameter()
+      //console.log('erath', this.earth)
+      this.drawSVG()
     }
   },
   methods: {
@@ -40,15 +57,28 @@ export default {
         let d = new Date().toISOString()
         let t = response.data.near_earth_objects
         vm.neo_list = t[Object.keys(t)[0]]
-        //vm.drawSVG()
       })
       .catch( (response) => {
         console.error(response)
       })
     },
+    setEarthRelativeDiameter: function () {
+      let max = (this.size.w > this.size.h) ? this.size.h : this.size.w
+      this.earth.container_diameter = this.earth.diameter_miles * (1 / 96)
+      //console.log('earth, 1/96', this.earth.diameter_miles * (1/96))
+    },
+    setSVGSizes: function () {
+      this.size.w = this.$refs.svg.offsetWidth
+      this.size.h = this.$refs.svg.offsetHeight
+    },
     avgEstDiameter: function (obj) {
-      return (obj.estimated_diameter.meters.estimated_diameter_max
-        + obj.estimated_diameter.meters.estimated_diameter_min) / 2
+      let aed = ((obj.estimated_diameter.meters.estimated_diameter_max
+        + obj.estimated_diameter.meters.estimated_diameter_min) / 2)
+      //console.log("aed", aed)
+      let relative_diameter = aed / this.earth.diameter_meters
+      //console.log('relative', relative_diameter)
+      return aed * (1 / 96)
+      //return (this.earth.container_diameter * relative_diameter)
     },
     drawSVG: function () {
       this.svg = d3.select("#neo-svg").append("svg")
@@ -59,20 +89,54 @@ export default {
         .attr("viewBox", `0 0 ${this.$refs.svg.offsetWidth} ${this.$refs.svg.offsetHeight}`)
         .attr("preserveAspectRatio", "none")
       let arcs = []
-      console.log("neo", this.neo_list)
-      this.neo_list.forEach( function (v,i) {
+      let radii = []
+      this.neo_list.forEach( (v,i) => {
         arcs.push(this.drawNEO(0, this.avgEstDiameter(v)))
+        radii.push(this.avgEstDiameter(v))
       })
-      console.log("arcs", arcs)
+      console.log(this.neo_list)
+      //console.log(this.earth.container_diameter)
 
-      this.svg.append("g")
-          .attr("class", "arcs")
-        .selectAll().data(arcs)
-          .enter().append("path")
-          .attr("stroke", "black")
-          .attr("stroke-width", 5)
-          .attr("data-valueset", (d) => {console.log('h',d)})
-          .attr("d", (d) => d)
+      // draw the sun
+      // one 'au' is currently half the svg width
+      let au = this.size.w / 2
+      let sun = this.svg.append("g").attr("class", "sun")
+        .selectAll().data(['sun'])
+          .enter().append("circle")
+          .attr("r", 100)
+          .attr("cx", 3 *(this.size.w / 4))
+          .attr("cy", this.size.h / 2)
+          .attr("fill", "orange")
+      // draw the earth
+      let earth = this.svg.append("g")
+          .attr("class", "earth")
+        .selectAll().data([this.earth.container_diameter])
+          .enter().append("circle")
+          .attr("r", (d) => d/2)
+          .attr("cx", 1 * (this.size.w / 4))
+          .attr("cy", this.size.h / 2)
+          .attr("fill", "green")
+
+      // draw the NEOs 
+      let circles = this.svg.append("g")
+          .attr("class", "neos")
+        .selectAll().data(radii)
+      circles.enter().append("circle")
+        .attr("r", (d) => d)
+          // perihelion dist is the closest point to the sun in elip orbat.
+        .attr("cx", (d,i) => this.neo_list[i].orbital_data.perihelion_distance * au) 
+        .attr("cy", this.size.h / 2)
+        .attr("fill", "blue")
+        .attr("title", (d,i) => this.neo_list[i].name)
+        .attr("stroke", (d,i) => {
+          if (this.neo_list[i].is_potentially_hazardous_asteroid) {
+            return "red"
+          }
+          return "yellow"
+        })
+        .attr("stroke-width", 2)
+
+      
     },
     drawNEO: function (ir, or) {
       let a = d3.arc({
@@ -88,7 +152,7 @@ export default {
     this.getNEOFeedToday()
   },
   mounted () {
-    this.drawSVG()
+    this.setSVGSizes()
   }
 }
 </script>
@@ -104,10 +168,9 @@ export default {
 }
 
 #neo-svg {
-  width: 600px;
-  height: 400px;
+  width: 800px;
+  height: 800px;
   margin: 0 auto;
-  border: 1px solid black;
 }
 
 h1, h2 {
