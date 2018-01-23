@@ -3,9 +3,6 @@
     <div class="near-earch-objects">
       {{ neo_data.element_count }}
     </div>
-    <div v-for="object in neo_list" >
-      {{ object.name }}
-    </div>
     <div ref="svg" class="" id="neo-svg">
     </div>
   </div>
@@ -136,7 +133,29 @@ export default {
         })
         .attr("stroke-width", 2)
 
-      
+      let angles = d3.range(0, 2 * Math.PI, Math.PI / 200)
+      // draw ellipse
+      let ellipse = this.svg.append("g")
+          .attr("class", "ellipse")
+        .selectAll("path").data(['blue'])
+        .enter().append("path")
+          .attr('stroke', (d) => d)
+          .attr("x", this.size.w / 2)
+          .attr("y", this.size.h / 2)
+          .datum( (d,i) => {
+            return d3.radialLine().curve(d3.curveLinearClosed)
+            .angle((a) => a)
+            .radius( (a) => {
+              return Math.cos(a * 8 - i * 2 * Math.PI / 3 + 5) * Math.pow((1 + Math.cos(a - 5)) / 2, 3) * 32;
+            })
+          })
+          .attr("d", (d) => d(angles))
+          /*
+      d3.timer(() => {
+          ellipse.attr("d", (d) => {
+            return d(angles)
+          })
+      })*/
     },
     drawNEO: function (ir, or) {
       let a = d3.arc({
