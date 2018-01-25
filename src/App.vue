@@ -25,19 +25,22 @@ export default {
         diameter_miles: 7917.5,
         diameter_meters: 12742000,
         container_diameter: 0,
+        orbital_data: {
+          eccentricity: 0.0167,
+          semi_major_axis: 1.00000011,
+        }
       },
       size: {
         w: 0,
         h: 0,
       },
+      au: 1,
       svg: undefined,
     }
   },
   watch: {
     neo_list: function (v) {
-      //console.log(this.size)
       this.setEarthRelativeDiameter()
-      //console.log('erath', this.earth)
       this.drawSVG()
     }
   },
@@ -62,20 +65,17 @@ export default {
     setEarthRelativeDiameter: function () {
       let max = (this.size.w > this.size.h) ? this.size.h : this.size.w
       this.earth.container_diameter = this.earth.diameter_miles * (1 / 96)
-      //console.log('earth, 1/96', this.earth.diameter_miles * (1/96))
     },
     setSVGSizes: function () {
       this.size.w = this.$refs.svg.offsetWidth
       this.size.h = this.$refs.svg.offsetHeight
+      this.au = this.size.w / 8
     },
     avgEstDiameter: function (obj) {
       let aed = ((obj.estimated_diameter.meters.estimated_diameter_max
         + obj.estimated_diameter.meters.estimated_diameter_min) / 2)
-      //console.log("aed", aed)
       let relative_diameter = aed / this.earth.diameter_meters
-      //console.log('relative', relative_diameter)
       return aed * (1 / 96)
-      //return (this.earth.container_diameter * relative_diameter)
     },
     drawSVG: function () {
       this.svg = d3.select("#neo-svg").append("svg")
@@ -85,18 +85,13 @@ export default {
         .attr("y", 0)
         .attr("viewBox", `0 0 ${this.$refs.svg.offsetWidth} ${this.$refs.svg.offsetHeight}`)
         .attr("preserveAspectRatio", "none")
-      let arcs = []
-      let radii = []
       this.neo_list.forEach( (v,i) => {
-        arcs.push(this.drawNEO(0, this.avgEstDiameter(v)))
-        radii.push(this.avgEstDiameter(v))
+        this.neo_list[i].radius = this.avgEstDiameter(v)
       })
-      console.log(this.neo_list)
-      //console.log(this.earth.container_diameter)
 
       // draw the sun
       // one 'au' for scaling
-      let au = this.size.w / 4
+      //let au = this.size.w / 4
       let sun = this.svg.append("g").attr("class", "sun")
         .selectAll().data(['sun'])
           .enter().append("circle")
@@ -110,84 +105,75 @@ export default {
         .selectAll().data([this.earth.container_diameter])
           .enter().append("circle")
           .attr("r", (d) => d/8)
-          .attr("cx", (3 * (this.size.w / 4)) - au)
+          .attr("cx", (3 * (this.size.w / 4)) - this.au)
           .attr("cy", this.size.h / 2)
           .attr("fill", "blue")
 
-      // draw ellipse
+      let earth_path = this.drawEllipticPath([this.earth])
+      // draw neo orbital path ellipse
+      let ellipses = this.drawEllipticPath(this.neo_list)
+
+      // draw neo moving along their orbital path
+      let moving = this.drawMovingOrbit(this.neo_list)
+    },
+    drawEllipticPath: function (object_list) {
       let colors = d3.schemeCategory20
-      let ellipses = this.svg.append("g")
+      return this.svg.append("g")
           .attr("class", "ellipses")
-        .selectAll().data(this.neo_list)
+        .selectAll().data(object_list)
           .enter().append("ellipse")
           .attr("stroke", (d,i) => colors[i])
           .attr("stroke-width", 2)
           .attr("fill", "transparent")
-          .attr("rx", (d) => d.orbital_data.semi_major_axis * au)
+          .attr("rx", (d) => d.orbital_data.semi_major_axis * this.au)
           .attr("ry", (d) => {
-              let sma = d.orbital_data.semi_major_axis
-              let ecc = d.orbital_data.eccentricity
-              // calculate the semi-minor-axis of the ellipse
-              let smi = (sma) * Math.sqrt(1 - Math.pow(ecc,2))
-              return smi * au
+              // calculate the semi-minor-axis of the ellipse -> a*sqrt(1 - e^2)
+              let smi = (d.orbital_data.semi_major_axis) * Math.sqrt(1 - Math.pow(d.orbital_data.eccentricity,2))
+              return smi * this.au
           })
-          .attr("cx", (d) => (3 * (this.size.h / 4)) - (d.orbital_data.eccentricity * d.orbital_data.semi_major_axis * au))
+          .attr("cx", (d) => (3 * (this.size.w / 4)) - (d.orbital_data.eccentricity * d.orbital_data.semi_major_axis * this.au))
           .attr("cy", this.size.h / 2)
-
-      // draw the NEOs 
-      let circles = this.svg.append("g")
-          .attr("class", "neos")
-        .selectAll().data(radii)
-      circles.enter().append("circle")
-        .attr("r", (d) => d)
-          // perihelion dist is the closest point to the sun in elip orbat.
-        .attr("cx", (d,i) => (3 * (this.size.h / 4)) + this.neo_list[i].orbital_data.perihelion_distance * au) 
-        .attr("cy", this.size.h / 2)
-        .attr("fill", "gray")
-        .attr("title", (d,i) => this.neo_list[i].name)
-        .attr("stroke", (d,i) => {
-          if (this.neo_list[i].is_potentially_hazardous_asteroid) {
-            return "red"
-          }
-          return "yellow"
-        })
-        .attr("stroke-width", 1)
-
-
-      // moving neo
-      let angles = d3.range(0, 2 * Math.PI, Math.PI / 100) 
+    },
+    drawMovingOrbit: function (object_list) {
       let moving = this.svg.append("g")
           .attr("class", "moving")
-        .selectAll().data(['green'])
-          .enter().append("path")
-          .attr("stroke", "green")
-          .attr("stroke-width", "3")
+          .attr("transform", `translate(${3*(this.size.w / 4)}, ${this.size.h / 2})`)
+        .selectAll().data(object_list)
+          .enter().append("circle")
+          .attr("r", (d) => d.radius * 5)
+          .attr("stroke", (d) => {
+            if (d.is_potentially_hazardous_asteroid) {
+              return "red"
+            }
+            return "yellow"
+          })
+          .attr("stroke-width", "1")
           .datum((d,i) => {
-            return d3.radialLine()
-              .curve(d3.curveLinearClosed)
-              .angle((a) => a)
-              .radius((a) => {
-                let t = d3.now() / 1000
-                let s = this.neo_list[0].orbital_data.semi_major_axis
-                let e = this.neo_list[0].orbital_data.eccentricity
-                return (a * (1 - Math.pow(e, 2))) / (1 + (e * Math.cos(a)))
-              })
+            return (j) => {
+              // angle * scale factor
+              let a = (j / d.orbital_data.orbital_period) * Math.PI * (1 / 16) 
+              let r = (d.orbital_data.semi_major_axis 
+                * (1 - Math.pow(d.orbital_data.eccentricity,2))) 
+                / (1 + (d.orbital_data.eccentricity * Math.cos(a)))
+              let cx = (r * this.au) * Math.cos(a)
+              let cy = (r * this.au) * Math.sin(a)
+              return {cx: cx, cy: cy}
+            }
           })
 
-      d3.timer(function() {
-        moving.attr("d", function(d) {
-          return d(angles);
-        });
-      });
-    },
-    drawNEO: function (ir, or) {
-      let a = d3.arc({
-        innerRadius: ir,
-        outerRadius: or,
-        startAngle: 0,
-        endAngle: (2 * Math.PI),
+      let timer = d3.timer(function(i) {
+        let a = (i / 1000) * Math.PI
+        moving.attr("cx", function(d,j) {
+          return d(i).cx
+        })
+        .attr("cy", (d,j) => {
+          return d(i).cy
+        })
+        if (i > 9000) {
+          timer.stop()
+        }
       })
-      return a
+      return {moving: moving, timer: timer}
     },
   },
   created () {
@@ -209,8 +195,8 @@ export default {
 }
 
 #neo-svg {
-  width: 800px;
-  height: 800px;
+  width: 80%;
+  height: 500px;
   margin: 0 auto;
 }
 
