@@ -3,7 +3,11 @@
     <div class="near-earch-objects">
       {{ neo_data.element_count }}
     </div>
-    <div ref="svg" class="" id="neo-svg">
+    <div ref="svg" class="svg-container" id="neo-svg">
+    </div>
+    <div class="controls">
+      <span>Scaling: <input type="number"></span>
+      <span><button>Pause</button></span>
     </div>
   </div>
 </template>
