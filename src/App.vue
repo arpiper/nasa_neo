@@ -1,13 +1,16 @@
 <template>
   <div id="app">
-    <div class="near-earch-objects">
-      {{ neo_data.element_count }}
+    <div class="near-earth-objects">
+      <span v-for="neo in neo_list" class="neo">
+        <a :href="neo.nasa_jpl_url" target="_blank" rel="noopener" >{{ neo.name }}</a>
+      </span>
     </div>
     <div ref="svg" class="svg-container" id="neo-svg">
     </div>
     <div class="controls">
-      <span>Scaling: <input type="number"></span>
-      <span><button>Pause</button></span>
+      <span>Scaling: <input v-model="scale_factor" type="number"></span>
+      <span><button @click="stopTimer()">Pause</button></span>
+      <span><button @click="setEllipticalTimer()">Start</button></span>
     </div>
   </div>
 </template>
@@ -39,12 +42,20 @@ export default {
         h: 0,
       },
       au: 1,
+      scale_factor: 4,
       svg: undefined,
+      orbits: undefined,
+      timer: undefined,
     }
   },
   watch: {
     neo_list: function (v) {
       this.setEarthRelativeDiameter()
+      this.drawSVG()
+    },
+    scale_factor: function (v) {
+      this.au = this.size.w / v
+      d3.select("#neo-svg svg").remove()
       this.drawSVG()
     }
   },
@@ -73,7 +84,8 @@ export default {
     setSVGSizes: function () {
       this.size.w = this.$refs.svg.offsetWidth
       this.size.h = this.$refs.svg.offsetHeight
-      this.au = this.size.w / 8
+      //this.au = this.size.w / 8
+      this.au = this.size.w / this.scale_factor
     },
     avgEstDiameter: function (obj) {
       let aed = ((obj.estimated_diameter.meters.estimated_diameter_max
@@ -82,6 +94,7 @@ export default {
       return aed * (1 / 96)
     },
     drawSVG: function () {
+      console.log("drawSVG start", this.neo_list)
       this.svg = d3.select("#neo-svg").append("svg")
         .attr("height", "100%")
         .attr("width", "100%")
@@ -92,11 +105,11 @@ export default {
       this.neo_list.forEach( (v,i) => {
         this.neo_list[i].radius = this.avgEstDiameter(v)
       })
-
       // draw the sun
       // one 'au' for scaling
       //let au = this.size.w / 4
       let sun = this.svg.append("g").attr("class", "sun")
+          .attr("class", "sun")
         .selectAll().data(['sun'])
           .enter().append("circle")
           .attr("r", 40)
@@ -112,22 +125,22 @@ export default {
           .attr("cx", (3 * (this.size.w / 4)) - this.au)
           .attr("cy", this.size.h / 2)
           .attr("fill", "blue")
-
-      let earth_path = this.drawEllipticPath([this.earth])
+      let earth_path = this.drawEllipticPath([this.earth], "earth_orbit")
       // draw neo orbital path ellipse
       let ellipses = this.drawEllipticPath(this.neo_list)
-
       // draw neo moving along their orbital path
-      let moving = this.drawMovingOrbit(this.neo_list)
+      this.orbits = this.drawMovingOrbit(this.neo_list)
+      // create info box
+      this.drawInfoBox(this.neo_list[0])
     },
-    drawEllipticPath: function (object_list) {
+    drawEllipticPath: function (object_list, classname = "ellipses") {
       let colors = d3.schemeCategory20
       return this.svg.append("g")
-          .attr("class", "ellipses")
+          .attr("class", classname)
         .selectAll().data(object_list)
           .enter().append("ellipse")
           .attr("stroke", (d,i) => colors[i])
-          .attr("stroke-width", 2)
+          .attr("stroke-width", 1)
           .attr("fill", "transparent")
           .attr("rx", (d) => d.orbital_data.semi_major_axis * this.au)
           .attr("ry", (d) => {
@@ -138,46 +151,81 @@ export default {
           .attr("cx", (d) => (3 * (this.size.w / 4)) - (d.orbital_data.eccentricity * d.orbital_data.semi_major_axis * this.au))
           .attr("cy", this.size.h / 2)
     },
-    drawMovingOrbit: function (object_list) {
+    drawMovingOrbit: function (object_list, classname = "moving") {
+      // neo container element
       let moving = this.svg.append("g")
-          .attr("class", "moving")
+          .attr("class", classname)
           .attr("transform", `translate(${3*(this.size.w / 4)}, ${this.size.h / 2})`)
         .selectAll().data(object_list)
-          .enter().append("circle")
-          .attr("r", (d) => d.radius * 5)
-          .attr("stroke", (d) => {
-            if (d.is_potentially_hazardous_asteroid) {
-              return "red"
-            }
-            return "yellow"
-          })
-          .attr("stroke-width", "1")
-          .datum((d,i) => {
-            return (j) => {
-              // angle * scale factor
-              let a = (j / d.orbital_data.orbital_period) * Math.PI * (1 / 16) 
-              let r = (d.orbital_data.semi_major_axis 
-                * (1 - Math.pow(d.orbital_data.eccentricity,2))) 
-                / (1 + (d.orbital_data.eccentricity * Math.cos(a)))
-              let cx = (r * this.au) * Math.cos(a)
-              let cy = (r * this.au) * Math.sin(a)
-              return {cx: cx, cy: cy}
-            }
-          })
+          .enter().append("g")
+          
+      // neo circle representation
+      this.svg.select("g.moving").selectAll("g")
+        .append("circle")
+        .attr("r", (d) => d.radius * 5)
+        .attr("fill", "gray")
+        .attr("stroke", (d) => {
+          if (d.is_potentially_hazardous_asteroid) {
+            return "red"
+          }
+          return "yellow"
+        })
+        .attr("stroke-width", "1")
 
-      let timer = d3.timer(function(i) {
-        let a = (i / 1000) * Math.PI
-        moving.attr("cx", function(d,j) {
-          return d(i).cx
+      // neo name tag
+      moving.append("text")
+        .attr("x", (d) => d.radius * 4)
+        .attr("dy", (d) => d.radius * 4)
+        .attr("font-size", "12")
+        .text((d,i) => {
+          return `${d.name}`
         })
-        .attr("cy", (d,j) => {
-          return d(i).cy
-        })
-        if (i > 9000) {
-          timer.stop()
+
+      // neo orbital movement function
+      moving.datum((d,i) => {
+        return (j) => {
+          // angle * scale factor
+          let a = (j / d.orbital_data.orbital_period) * Math.PI * (1 / 16) 
+          let r = (d.orbital_data.semi_major_axis 
+            * (1 - Math.pow(d.orbital_data.eccentricity,2))) 
+            / (1 + (d.orbital_data.eccentricity * Math.cos(a)))
+          let cx = (r * this.au) * Math.cos(a)
+          let cy = (r * this.au) * Math.sin(a)
+          return {cx: cx, cy: cy}
         }
       })
-      return {moving: moving, timer: timer}
+      // Start orbital motion
+      this.setEllipticalTimer(moving);
+      return moving
+    },
+    drawInfoBox: function (dataObject) {
+      this.svg.append("g").selectAll()
+          .data([dataObject])
+        .enter().append("foreignObject")
+          .attr("x", 20)
+          .attr("y", this.size.h * 2 / 3)
+          .attr("width", 150)
+          .attr("height", 150)
+          .attr("class", "neo-info-box")
+        .append("xhtml:body")
+          .append("div")
+          .text((d) => d.name)
+          .append('div').text((d) => {
+            let min = d.estimated_diameter.miles.estimated_diameter_min.toPrecision(4)
+            let max = d.estimated_diameter.miles.estimated_diameter_max.toPrecision(4)
+            return `Est. Diameter(miles): ${min} - ${max}`
+          })
+    },
+    setEllipticalTimer: function (objects = this.orbits) {
+      this.timer = d3.timer((i) => {
+        objects.attr("transform", (d) => {
+          let c = d(i)
+          return `translate(${c.cx}, ${c.cy})`
+        })
+      })
+    },
+    stopTimer: function () {
+      this.timer.stop()
     },
   },
   created () {
@@ -196,29 +244,43 @@ export default {
   -moz-osx-font-smoothing: grayscale;
   text-align: center;
   color: #2c3e50;
-}
-
-#neo-svg {
   width: 80%;
+  display: flex;
+  justify-content: center;
+  margin: 0 auto;
+  flex-wrap: wrap;
+}
+#neo-svg {
+  border: 1px solid #444;
+  width: 100%;
   height: 500px;
   margin: 0 auto;
 }
-
 h1, h2 {
   font-weight: normal;
 }
-
 ul {
   list-style-type: none;
   padding: 0;
 }
-
 li {
   display: inline-block;
   margin: 0 10px;
 }
-
 a {
   color: #42b983;
+}
+.near-earth-objects {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.neo {
+  padding: 5px;
+}
+.neo-info-box {
+  background-color: #ddd;
+  font-size: 10px;
+  text-align: left;
 }
 </style>
