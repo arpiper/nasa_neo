@@ -2,6 +2,6 @@ import Vue from 'vue'
 import App from './App.vue'
 
 new Vue({
-  el: '#app',
+  el: '#nasa-near-earth-objects',
   render: h => h(App)
 })

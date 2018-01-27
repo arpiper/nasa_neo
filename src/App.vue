@@ -1,5 +1,5 @@
 <template>
-  <div id="app">
+  <div id="nasa-near-earth-objects">
     <div class="near-earth-objects">
       <span v-for="neo, index in neo_list" class="neo" :class="{'selected': (index === 0)}">
         <span @click="drawInfoBox([neo], $event)">{{ neo.name }}</span>
@@ -30,6 +30,7 @@
         </button>
       </span>
     </div>
+    <div class="fine-print">Objects not to scale</div>
   </div>
 </template>
 
@@ -105,20 +106,16 @@ export default {
       })
     },
     setEarthRelativeDiameter: function () {
-      //let max = (this.size.w > this.size.h) ? this.size.h : this.size.w
-      this.earth.container_diameter = this.earth.diameter_miles * (1 / 96)
       this.earth.radius = this.earth.diameter_miles * (1 / 3840)
     },
     setSVGSizes: function () {
       this.size.w = this.$refs.svg.offsetWidth
       this.size.h = this.$refs.svg.offsetHeight
-      //this.au = this.size.w / 8
       this.au = this.size.w / this.scale_factor
     },
     avgEstDiameter: function (obj) {
       let aed = ((obj.estimated_diameter.meters.estimated_diameter_max
         + obj.estimated_diameter.meters.estimated_diameter_min) / 2)
-      //let relative_diameter = aed / this.earth.diameter_meters
       return aed * (1 / 96)
     },
     drawSVG: function () {
@@ -284,7 +281,7 @@ export default {
 </script>
 
 <style>
-#app {
+#nasa-near-earth-objects {
   font-family: 'Avenir', Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -343,5 +340,9 @@ a {
 }
 .neo-info-box div {
   padding: 2px 0;
+}
+.fine-print { 
+  font-size: 8pt;
+  padding: 5px;
 }
 </style>
