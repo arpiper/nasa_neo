@@ -61,6 +61,7 @@ export default {
         colors: {
           fill: "blue",
           stroke: "blue",
+          orbit: "blue",
         },
         orbit: undefined,
         timer: undefined,
@@ -126,11 +127,13 @@ export default {
         .attr("y", 0)
         .attr("viewBox", `0 0 ${this.$refs.svg.offsetWidth} ${this.$refs.svg.offsetHeight}`)
         .attr("preserveAspectRatio", "none")
+      let colors = d3.schemeCategory20
       this.neo_list.forEach( (v,i) => {
         this.neo_list[i].radius = this.avgEstDiameter(v)
         this.neo_list[i].colors = {
           fill: "gray",
           stroke: (v.is_potentially_hazardous_asteroid) ? "red" : "yellow",
+          orbit: colors[i]
         }
       })
       // draw the sun
@@ -156,12 +159,11 @@ export default {
       this.drawInfoBox([this.neo_list[0]])
     },
     drawEllipticPath: function (object_list, classname = "ellipses") {
-      let colors = d3.schemeCategory20
       return this.svg.append("g")
           .attr("class", classname)
         .selectAll().data(object_list)
           .enter().append("ellipse")
-          .attr("stroke", (d,i) => colors[i])
+          .attr("stroke", (d,i) => d.colors.orbit)
           .attr("stroke-width", 1)
           .attr("fill", "transparent")
           .attr("rx", (d) => d.orbital_data.semi_major_axis * this.au)
@@ -228,6 +230,7 @@ export default {
           .attr("height", 150)
           .attr("class", "neo-info-box")
         .append("xhtml:body")
+          .style("margin", "5px")
       // NEO name
       box.append("div")
         .text((d) => d.name)
@@ -250,6 +253,11 @@ export default {
       })
       box.append("div").text(
         (d) => `Relative Velocity: ${d.close_approach_data[0].relative_velocity.miles_per_hour} mph`
+      )
+      box.append("div")
+        .style("color", (d) => d.colors.orbit)
+        .text(
+        (d) => `Orbit Line Color: ${d.colors.orbit}`
       )
     },
     setEllipticalTimer: function (objects = this.orbits) {
