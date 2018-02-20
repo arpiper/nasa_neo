@@ -319,7 +319,7 @@ li {
   margin: 0 10px;
 }
 a {
-  color: #42b983;
+  color: #4caf50;
 }
 .near-earth-objects {
   display: flex;
@@ -329,13 +329,13 @@ a {
 .neo {
   padding: 3px;
   margin: 2px;
-  background-color: #42b983;
+  background-color: #4caf50;
   color: #f3f3f3;
-  border: 3px solid #42b983;
+  border: 3px solid #4caf50;
 }
 .neo:hover,
 .neo.selected {
-  color: #42b983;
+  color: #4caf50;
   background-color: #f3f3f3;
 }
 .neo:hover {
